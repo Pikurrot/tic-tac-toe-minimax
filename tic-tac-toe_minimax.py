@@ -15,10 +15,47 @@ empty_board = np.array([
 	["","",""]
 	])
 
+# Board func
 def reset_board():
 	global board, turn
 	board = np.copy(empty_board)
 	turn = "x"
+
+def board_status(arg_board):
+	for mark in ("x","o"):
+		if 	(arg_board[0,0],arg_board[0,1],arg_board[0,2]) == (mark,)*3 or\
+			(arg_board[1,0],arg_board[1,1],arg_board[1,2]) == (mark,)*3 or\
+			(arg_board[2,0],arg_board[2,1],arg_board[2,2]) == (mark,)*3 or\
+			(arg_board[0,0],arg_board[1,0],arg_board[2,0]) == (mark,)*3 or\
+			(arg_board[0,1],arg_board[1,1],arg_board[2,1]) == (mark,)*3 or\
+			(arg_board[0,2],arg_board[1,2],arg_board[2,2]) == (mark,)*3 or\
+			(arg_board[0,0],arg_board[1,1],arg_board[2,2]) == (mark,)*3 or\
+			(arg_board[0,2],arg_board[1,1],arg_board[2,0]) == (mark,)*3: return mark
+		elif "" not in arg_board: return "draw"
+		else: return "none"
+
+def possible_boards(arg_tree, arg_turn):
+	if board_status(arg_tree.val) == "none":
+		boards = []
+		for (row,lst) in enumerate(arg_tree.val):
+			for (col,val) in enumerate(lst):
+				if val == "":
+					temp_board = np.copy(arg_tree.val)
+					temp_board[row][col] = arg_turn
+					boards.append(temp_board)
+		for i,sub_board in enumerate(boards):
+			arg_tree.add_node(sub_board)
+			if arg_turn == "x": next_turn = "o"
+			else: next_turn = "x"
+			possible_boards(arg_tree.nodes[i], next_turn)
+	else: 
+		return
+
+# General func
+def move_AI():
+	boards = Tree(board)
+	possible_boards(boards, "o")
+	print(boards)
 
 def draw_GUI():
 	width = 10
@@ -31,19 +68,23 @@ def draw_GUI():
 	# Draw buttons
 	for button in buttons:
 		button.draw()
+	pygame.display.update()
 
-def board_status():
-	for mark in ("x","o"):
-		if 	(board[0,0],board[0,1],board[0,2]) == (mark,)*3 or\
-			(board[1,0],board[1,1],board[1,2]) == (mark,)*3 or\
-			(board[2,0],board[2,1],board[2,2]) == (mark,)*3 or\
-			(board[0,0],board[1,0],board[2,0]) == (mark,)*3 or\
-			(board[0,1],board[1,1],board[2,1]) == (mark,)*3 or\
-			(board[0,2],board[1,2],board[2,2]) == (mark,)*3 or\
-			(board[0,0],board[1,1],board[2,2]) == (mark,)*3 or\
-			(board[0,2],board[1,1],board[2,0]) == (mark,)*3: 	return mark
-		elif "" not in board: 									return "draw"
-		else: 													return "none"
+# Classes
+class Tree():
+	def __init__(self, val):
+		self.val = val
+		self.nodes = []
+		
+	def add_node(self, val):
+		self.nodes.append(Tree(val))
+
+	def __repr__(self):
+		return f"""
+Parent:
+{self.val}
+Childs:
+{self.nodes}"""
 
 class Button():
 	def __init__(self, pos, w, h, func, border=0, radius=0, show=False, text="", color1=(255,255,255), color2=(0,0,0)):
@@ -107,6 +148,7 @@ def main():
 	buttons.append(Button((display_size.x/4, display_size.y-b_h/2), b_w-b_sep_x, b_h-b_sep_y, "restart", display_size.x/50, 10, True, "Restart", b_color))
 	buttons.append(Button((display_size.x/4*3, display_size.y-b_h/2), b_w-b_sep_x, b_h-b_sep_y, "start AI", display_size.x/50, 10, True, "Start AI", b_color))
 	running = True
+	draw_GUI()
 	while running:
 		events = pygame.event.get()
 		for event in events:
@@ -116,9 +158,8 @@ def main():
 				if pygame.mouse.get_pressed()[0]:
 					for button in buttons:
 						button.click()
-					print(board_status())
-		draw_GUI()
-		pygame.display.update()
+					draw_GUI()
+	move_AI()
 
 if __name__ == "__main__":
 	main()
