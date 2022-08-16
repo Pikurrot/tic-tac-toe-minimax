@@ -1,6 +1,7 @@
 import pygame
 from collections import namedtuple
 import numpy as np
+from random import randint
 
 pygame.init()
 display_size = namedtuple("display_size", "x y")
@@ -21,7 +22,9 @@ def reset_board():
 	board = np.copy(empty_board)
 	turn = "x"
 
-def board_status(arg_board):
+def board_status(arg_board, arg_player): 
+	# Return the status of given board
+	# 1 = Win, 0 = Draw, -1 = Lose, None = Players can still move
 	for mark in ("x","o"):
 		if 	(arg_board[0,0],arg_board[0,1],arg_board[0,2]) == (mark,)*3 or\
 			(arg_board[1,0],arg_board[1,1],arg_board[1,2]) == (mark,)*3 or\
@@ -30,32 +33,74 @@ def board_status(arg_board):
 			(arg_board[0,1],arg_board[1,1],arg_board[2,1]) == (mark,)*3 or\
 			(arg_board[0,2],arg_board[1,2],arg_board[2,2]) == (mark,)*3 or\
 			(arg_board[0,0],arg_board[1,1],arg_board[2,2]) == (mark,)*3 or\
-			(arg_board[0,2],arg_board[1,1],arg_board[2,0]) == (mark,)*3: return mark
-		elif "" not in arg_board: return "draw"
-		else: return "none"
+			(arg_board[0,2],arg_board[1,1],arg_board[2,0]) == (mark,)*3: temp_status = mark
+		elif "" not in arg_board: return 0
+		else: return None
+	if temp_status == arg_player: return 1
+	else: return -1
+
+def move_pos(board1, board2):
+	# Return the position of the mark that has changed from board1 to board2
+	for row,(lst1,lst2) in enumerate(zip(board1,board2)):
+		for col,(val1,val2) in enumerate(zip(lst1,lst2)):
+			if val1 != val2:
+				return (row,col)
+	return None
 
 def possible_boards(arg_tree, arg_turn):
-	if board_status(arg_tree.val) == "none":
+	# Grow arg_tree (a Tree obj) to a Tree of all possible boards
+	# Recursive func
+	if board_status(arg_tree.val,arg_turn) == None:
 		boards = []
+		# Possible boards of the given board (arg_tree.val)
 		for (row,lst) in enumerate(arg_tree.val):
 			for (col,val) in enumerate(lst):
 				if val == "":
 					temp_board = np.copy(arg_tree.val)
 					temp_board[row][col] = arg_turn
 					boards.append(temp_board)
+		# Repeat alghoritm with every child board
 		for i,sub_board in enumerate(boards):
-			arg_tree.add_node(sub_board)
-			if arg_turn == "x": next_turn = "o"
-			else: next_turn = "x"
-			possible_boards(arg_tree.nodes[i], next_turn)
-	else: 
-		return
+			arg_tree.add_child(sub_board)
+			if arg_turn == "x": temp_turn = "o"
+			else: temp_turn = "x"
+			arg_tree.childs[i] = possible_boards(arg_tree.childs[i], temp_turn)
+	return arg_tree
+
+def minimax(arg_tree, arg_turn):
+	# Return list of points for every possible immediate move
+	# Recursive func
+	points = []
+	for tmp_child in arg_tree.childs:
+		# Calculate point of child board according to its board status
+		point = board_status(tmp_child.val,arg_turn)
+		if point == None:
+			# If the game is still playable (no win, no lose, no draw), repeat alghoritm with child board
+			if arg_turn == "x": # opponent move
+				point = min(minimax(tmp_child,"o"))
+			else: # AI move
+				point = max(minimax(tmp_child,"x"))
+		points.append(point)
+	return points
 
 # General func
 def move_AI():
-	boards = Tree(board)
-	possible_boards(boards, "o")
-	print(boards)
+	global turn, board
+	if np.array_equal(board,empty_board):
+		# If the board is empty, start in a random corner (best starting points)
+		best_moves = [(0,0),(0,2),(2,0),(2,2)]
+		pos = best_moves[randint(0,len(best_moves)-1)]
+	else:
+		boards = possible_boards(Tree(board),turn) # Grow the Tree to possible boards
+		points = minimax(boards,turn) # Calculate points of possible immediate moves
+		best_move = boards.childs[points.index(max(points))].val # Calculate best move
+		pos = move_pos(board,best_move)	 # Calculate its position
+	board[pos[0],pos[1]] = turn # Move to that position
+	if turn == "x":
+		turn = "o"
+	else:
+		turn = "x"
+	print(f"AI move: ({pos[1]},{pos[0]})")
 
 def draw_GUI():
 	width = 10
@@ -74,17 +119,17 @@ def draw_GUI():
 class Tree():
 	def __init__(self, val):
 		self.val = val
-		self.nodes = []
+		self.childs = []
 		
-	def add_node(self, val):
-		self.nodes.append(Tree(val))
+	def add_child(self, child):
+		self.childs.append(Tree(child)) # child --> val
 
 	def __repr__(self):
 		return f"""
-Parent:
+Val:
 {self.val}
 Childs:
-{self.nodes}"""
+{self.childs}"""
 
 class Button():
 	def __init__(self, pos, w, h, func, border=0, radius=0, show=False, text="", color1=(255,255,255), color2=(0,0,0)):
@@ -111,10 +156,12 @@ class Button():
 			if type(self.func) == tuple:
 				if board[self.func[1],self.func[0]] == "":
 					board[self.func[1],self.func[0]] = "x"
+					turn = "o"
 			elif self.func == "restart":
 				reset_board()
 			elif self.func == "start AI" and self.show:
 				turn = "o"
+				self.show = False
 		if self.func == "start AI":
 			self.show = np.array_equal(board,empty_board)
 
@@ -159,7 +206,9 @@ def main():
 					for button in buttons:
 						button.click()
 					draw_GUI()
-	move_AI()
+		if turn == "o":
+			move_AI()
+			draw_GUI()
 
 if __name__ == "__main__":
 	main()
