@@ -15,28 +15,10 @@ empty_board = np.array([
 	["","",""],
 	["","",""]
 	])
-test_board = np.array([
-	["x","",""],
-	["","o",""],
-	["o","x","x"]
-	])
 board = np.copy(empty_board)
 end = False
 
 # Board func
-def show_board(arg_board):
-	str_board = ""
-	for lst in arg_board:
-		string = "["
-		for mark in lst:
-			if mark == "": string += " "
-			else: string += mark
-			string += "  "
-		string = string[:-2]
-		str_board += string+"]\n"
-	str_board = str_board[:-1]
-	return str_board
-
 def reset_board():
 	global board, turn
 	board = np.copy(empty_board)
@@ -87,29 +69,37 @@ def possible_boards(arg_tree, arg_turn):
 			arg_tree.childs[i] = possible_boards(arg_tree.childs[i], temp_turn)
 	return arg_tree
 
-def minimax(arg_tree, arg_turn, board_id="board 1"):
+def choose(point_lst, depth_lst, func):
+	# Choose the best move according to the function (min/max) given a list of points
+	# and a list of depths (one depth for each point). If two moves gives the same points,
+	# it will choose the one with less depth.
+	depth_lst2 = [d for d,p in zip(depth_lst,point_lst) if p == func(point_lst)]
+	for i,(p,d) in enumerate(zip(point_lst,depth_lst)):
+		if p == func(point_lst) and d == min(depth_lst2):
+			return (p,d,i)
+
+def minimax(arg_tree, arg_turn, arg_depth=0):
 	# Return list of points for every possible immediate move
 	# Recursive func
 	points = []
+	depths = []
 	if arg_turn == "x": arg_turn = "o"
 	else: arg_turn = "x"
 	for i,tmp_child in enumerate(arg_tree.childs):
 		# Calculate point of child board according to its board status
 		point = board_status(tmp_child.val)
+		depth = arg_depth
 		if point == None:
 			# If the game is still playable (no win, no lose, no draw), repeat algorithm with child board
 			if arg_turn == "x": # opponent move
-				point = min(minimax(tmp_child,arg_turn,board_id+"."+str(i)))
+				point_lst,depth_lst = minimax(tmp_child,arg_turn,arg_depth+1)
+				point,depth,_ = choose(point_lst,depth_lst,min)
 			else: # AI move
-				point = max(minimax(tmp_child,arg_turn,board_id+"."+str(i)))
+				point_lst,depth_lst = minimax(tmp_child,arg_turn,arg_depth+1)
+				point,depth,_ = choose(point_lst,depth_lst,max)
 		points.append(point)
-# 		print(f"""
-# {board_id+"."+str(i)}: 
-# {show_board(tmp_child.val)}
-# turn: {arg_turn}
-# points: {points}
-# 		""")
-	return points
+		depths.append(depth)
+	return (points,depths)
 
 # General func
 def move_AI():
@@ -118,25 +108,26 @@ def move_AI():
 		# If the board is empty, start in a random corner (best starting points)
 		best_moves = [(0,0),(0,2),(2,0),(2,2)]
 		pos = best_moves[randint(0,len(best_moves)-1)]
+	elif sum(list(row).count("") for row in board) == 8:
+		# If there's only one mark in the board, don't use minimax as it's not optimal.
+		if board[1][1] == "x":
+			best_moves = [(0,0),(0,2),(2,0),(2,2)]
+			pos = best_moves[randint(0,len(best_moves)-1)]
+		else: # The middle position is the most strategic
+			pos = (1,1)
 	else:
 		boards = possible_boards(Tree(board),turn) # Grow the Tree to possible boards
-		points = minimax(boards,turn) # Calculate points of possible immediate moves
-# 		print(f"""
-# {"board 1"}: 
-# {show_board(boards.val)}
-# turn: {turn}
-# points: {points}
-# 		""")
-		best_move = boards.childs[points.index(max(points))].val # Calculate best move
+		points,depths = minimax(boards,turn) # Calculate points of possible immediate moves
+		best_move = boards.childs[choose(points,depths,max)[2]].val # Calculate best move
 		pos = move_pos(board,best_move)	 # Calculate its position
 	board[pos[0],pos[1]] = turn # Move to that position
 	if turn == "x":
 		turn = "o"
 	else:
 		turn = "x"
-	print(f"AI move: ({pos[0]},{pos[1]})")
 
 def draw_board(x, y, w, h, arg_board=board, draw_marks=True):
+	# Draw the board with given position and size
 	pygame.draw.rect(display, (255,255,255), pygame.Rect(x-w/2,y-h/2,w,h))
 	# Draw grid
 	for x2 in range(0,4):
@@ -170,13 +161,6 @@ class Tree():
 	def add_child(self, child):
 		self.childs.append(Tree(child)) # child --> val
 
-	def __repr__(self):
-		return f"""
-Val:
-{self.val}
-Childs:
-{self.childs}"""
-
 class Button():
 	def __init__(self, pos, w, h, func, border=0, radius=0, show=False, text="", color1=(255,255,255), color2=(0,0,0)):
 		self.x, self.y = pos
@@ -190,7 +174,6 @@ class Button():
 		self.rect = pygame.Rect(self.x-self.w/2,self.y-self.h/2,self.w,self.h)
 		self.color1 = (color1[0],color1[1],color1[2],show)
 		self.color2 = (color2[0],color2[1],color2[2],show)
-		self.clicked = False
 		self.text_size = int(display_size.y/15)
 		self.text_font = pygame.font.SysFont('Calibri', self.text_size)
 		self.tile_font = pygame.font.SysFont('Calibri', int(display_size.x/3))
@@ -210,15 +193,17 @@ class Button():
 				turn = "o"
 				self.show = False
 		if self.func == "start AI":
-			self.show = np.array_equal(board,empty_board)
+			self.show = np.array_equal(board,empty_board) and  turn == "x"
 
 	def draw(self):
 		if type(self.func) == tuple:
+			# Draw mark
 			self.text = board[self.func[1],self.func[0]]
 			text = self.tile_font.render(self.text,True,(0,0,0))
 			text_rect = text.get_rect(center=(self.x,self.y))
 			display.blit(text,text_rect)
 		elif self.show:
+			# Draw other buttons
 			pygame.draw.rect(display, self.color1, self.rect, border_radius=self.radius)
 			if self.border!=0:
 				pygame.draw.rect(display, self.color2, self.rect, int(self.border), self.radius)
@@ -265,7 +250,6 @@ def main():
 					move_AI()
 					draw_GUI()
 			else:
-				print("Drawing", status)
 				if status == -1:
 					text_color = (0,255,0)
 					end_text ="You win!"
