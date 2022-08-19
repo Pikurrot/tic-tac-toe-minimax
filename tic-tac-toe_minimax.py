@@ -158,8 +158,8 @@ class Tree():
 		self.val = val
 		self.childs = []
 		
-	def add_child(self, child):
-		self.childs.append(Tree(child)) # child --> val
+	def add_child(self, val):
+		self.childs.append(Tree(val))
 
 class Button():
 	def __init__(self, pos, w, h, func, border=0, radius=0, show=False, text="", color1=(255,255,255), color2=(0,0,0)):
